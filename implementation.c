@@ -40,7 +40,7 @@ Game sequence:
 
 // Constants
 #define MAX_STRING_LENGTH   200     // Max length of any string
-
+#define MAX_NAME_LENGTH     20      // Max player name length
 #define MAX_HINTS           10      // Max hints for any question
 
 #define ANSWER_UPPER        1000    // upper/lower bound for integer answers
@@ -50,6 +50,7 @@ Game sequence:
 #define GAME_ROUND_LOWER    1
 
 #define DEFAULT_POSITION_LIMIT  30  // default position limit
+#define DEFAULT_PLAYER_MAX      30  // deafult max players
 
 // Strings when handling game creation
 #define GAME_ROUNDS         "How many rounds would you like to have?: "
@@ -70,7 +71,9 @@ Game sequence:
 #define INT_READ_ERROR      "Invalid input. Please enter a valid integer."
 #define INT_RANGE_ERROR     "Input out of range "
 
-// 
+// Strings for adding players
+#define ADD_PLAYER_QUERY    "Add another player (\"y\" or \"n\")?"
+#define REGO_PLAYER_NAME    "Player name: "
 
 // Struct for individual questions
 typedef struct question {
@@ -90,14 +93,14 @@ typedef struct gameData {
 // Struct for orderbook
 typedef struct orderHead {
     orders *next;                       // points to first order
-    char orderType;                     // Whether Bid or Ask
+    char order_type;                     // Whether Bid or Ask
     int volume;                         // How much
-} order
+} orderHead
 
 // Struct for order
 typedef struct order {
     player *owner;                          // Player that owns it
-    char orderType;                     // Whether bid or ask
+    char order_type;                     // Whether bid or ask
     int hashkey;                        // Which order it is
     int volume;                         // How much
     order *next;                        // Next in line
@@ -109,19 +112,25 @@ typedef struct order {
 // check current position using outstanding bids and asks to ensure player
 // doesn't exceed position limit 
 typedef struct player {
-    int playerNumber;                   // player identifier
+    char *player_name;
+    int player_number;                  // player identifier
     int balance;                        // current balance
     int position;                       // position, 
-    int outstanding_bids;               // outstanding bids
-    int outstanding_asks;               // outstanding aks
-    order *orders;                      // current orders
+    orderHead *outstanding_bids;        // outstanding bids
+    orderHead *outstanding_asks;        // outstanding aks
 } player
+
+typedef struct gameLobby {
+    player **players;
+    int player_count;
+} gameLobby
 
 // Helpers
 void flush_input();                 // Flushes inputs after reading from stdin
 void read_string(
     char printString[],                 // Error string
-    char *destination                   // Pointer to string to write into
+    char *destination,                  // Pointer to string to write into
+    int strLen,                         // Size of destination string
 );                                  // reads strings
 void read_int(
     char printString[],                 // Error String
@@ -137,8 +146,7 @@ void free_question(question *q);    // frees question
 // Game sequence 1. a)
 gameData *initialise_game();        // Initialise game
 question *initialise_question();    // initialise questions
-// initialise player, 
-// I'll need to write something to test it with...
+lobby *initialise_lobby();          // Initialise players
 
 // Game sequence 2.
 void game_loop(gameData *g);        // Start game
@@ -149,9 +157,13 @@ void start_round(questions);        // Start round
 
 int main(void) {
     gameData *game = initialise_game();
+    gameLobby *lobby = initialise_lobby();
 
     game_loop(game);
 
+    player_rego();
+
+    free_lobby(lobby);
     free_game(game);
 
     return 0;
@@ -164,7 +176,7 @@ void flush_input() {
     while ((c = getchar()) != '\n' && c != EOF);
 }
 
-void read_string(char printString[], char *destination) {
+void read_string(char printString[], char *destination, int strLen) {
     while (1) {
         printf("%s", printString);
         if (fgets(destination, MAX_STRING_LENGTH, stdin) == NULL) {
@@ -227,6 +239,30 @@ void free_question(question *q) {
     free(q);
 }
 
+void free_lobby(gameLobby *lobby) {
+    for (int i = 0;i < DEFAULT_PLAYER_MAX;i++) {
+        if (lobby->players[i] != NULL) free_player(lobby->players[i]);
+    } 
+    free(lobby);
+}
+
+void free_player(player *p) {
+    free(p->player_name);
+    free_orderHead(p->outstanding_bids);
+    free_orderHead(p->outstanding_asks);
+    free(p);
+}
+
+void free_orderHead(orderHead h) {
+    order temp = h->next, prev = h->next;
+
+    while (temp != NULL) {
+        prev = temp;
+        temp = temp->next;
+        free(prev);
+    }
+}
+
 ///////////////////////////////// SEQUENCE 1a) /////////////////////////////////
 
 gameData *initialise_game() {
@@ -255,7 +291,7 @@ question *initialise_question() {
     for (int i = 0; i < MAX_HINTS; i++) q->hints[i] = NULL;
 
     // Read question
-    read_string(STRING_WRITE_Q, q->question);
+    read_string(STRING_WRITE_Q, q->question, MAX_STRING_LENGTH);
 
     // Read answer
     read_int(STRING_WRITE_ANS, &q->answer, ANSWER_LOWER, ANSWER_UPPER);
@@ -268,8 +304,11 @@ question *initialise_question() {
     while (user_input == 'y') {
         flush_input();
         q->hints[q->hint_count] = malloc(MAX_STRING_LENGTH * sizeof(char));
-        read_string(STRING_WRITE_HINT, q->hints[q->hint_count]);
-        q->hint_count++;
+        read_string(
+            STRING_WRITE_HINT, 
+            q->hints[q->hint_count++], 
+            MAX_STRING_LENGTH
+        );
 
         if (q->hint_count < MAX_HINTS) {
             printf("%s", STRING_MORE_HINT);
@@ -280,6 +319,38 @@ question *initialise_question() {
     }
 
     return q;
+}
+
+gameLobby *initialise_lobby() {
+    gameLobby *lobby = malloc(sizeof(gameLobby));
+    lobby->players = malloc(DEFAULT_PLAYER_MAX * sizeof(player));
+    for (int i = 0;i < DEFAULT_PLAYER_MAX;i++) lobby->players[i] = NULL;
+    lobby->player_count = 0;
+
+    while (lobby->player_count < DEFAULT_PLAYER_MAX) {
+        initialise_player(
+            lobby->players[lobby->player_count++], 
+            lobby->player_count
+        );
+
+        printf("%s", ADD_PLAYER_QUERY);
+        if (getchar() == 'y') {
+            flush_input();
+            break;
+        }
+    }
+
+    return lobby;
+}
+
+void *initialise_player(player *p, int i) {
+    p->player_name = malloc(MAX_NAME_LENGTH * sizeof(char));
+    read_string(REGO_PLAYER_NAME, p->player_name, MAX_NAME_LENGTH);
+    p->player_number = i;
+    p->balance = 0;
+    p->position = 0;
+    p->asks = NULL;
+    p->bids = NULL;
 }
 
 ///////////////////////////////// SEQUENCE 2a) /////////////////////////////////
