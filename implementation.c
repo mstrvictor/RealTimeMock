@@ -32,6 +32,14 @@ Game sequence:
   
   Discussion
     1. Datastructure of orderbook?
+    2. Main function points to "mini-main" functions, such as main for seq 1,
+    seq 2 etc. Make a graph/network to make everything more interpretable. 
+    3. Running multiple games simultaneously? Honestly thats going to be a hard
+    ask, probably only 1 game at a time. Give someone backdoor handling in the 
+    server, maybe operate everything via terminal. Or just make an admin panel
+    UNSW quantsoc email logins to/controls. 
+    4. The more I work with the project the better I understand web dev. This is
+    the easy part lol
 */
 
 #include <stdio.h>
@@ -75,6 +83,9 @@ Game sequence:
 #define ADD_PLAYER_QUERY    "Add another player (\"y\" or \"n\")?"
 #define REGO_PLAYER_NAME    "Player name: "
 
+// Global variable tracking player_count
+int global_player_counter = 100;
+
 // Struct for individual questions
 typedef struct question {
     char *question;                     // String of question
@@ -93,16 +104,15 @@ typedef struct gameData {
 // Struct for orderbook
 typedef struct orderHead {
     orders *next;                       // points to first order
-    char order_type;                     // Whether Bid or Ask
-    int volume;                         // How much
+    int volume;                         // + for asks, - for bids. 
+    int price;                          // use in orderbook not in player orders
 } orderHead
 
 // Struct for order
 typedef struct order {
-    player *owner;                          // Player that owns it
-    char order_type;                     // Whether bid or ask
+    player *owner;                      // Player that owns it
     int hashkey;                        // Which order it is
-    int volume;                         // How much
+    int volume;                         // + for asks, - for bids. 
     order *next;                        // Next in line
     order *prev;                        // Prev, can point to head, NULL if 1st
     orderHead *head;                    // Head of the struct
@@ -112,7 +122,7 @@ typedef struct order {
 // check current position using outstanding bids and asks to ensure player
 // doesn't exceed position limit 
 typedef struct player {
-    char *player_name;
+    char *player_name;                  // player name
     int player_number;                  // player identifier
     int balance;                        // current balance
     int position;                       // position, 
@@ -121,8 +131,8 @@ typedef struct player {
 } player
 
 typedef struct gameLobby {
-    player **players;
-    int player_count;
+    player **players;                   // array of pointers to players
+    int player_count;                   // count of active players. 
 } gameLobby
 
 // Helpers
@@ -142,15 +152,22 @@ void read_int(
 // Free
 void free_game(gameData *game);     // frees game
 void free_question(question *q);    // frees question
+void free_lobby(gameLobby *lobby);  // free lobby
+void free_player(player *p);        // free player
+void free_orderHead(orderHead h);   // free orderHead
 
 // Game sequence 1. a)
 gameData *initialise_game();        // Initialise game
 question *initialise_question();    // initialise questions
-lobby *initialise_lobby();          // Initialise players
+gameLobby *initialise_lobby();      // Initialise lobby
+void *initialise_player(player *p); // initialise players
 
 // Game sequence 2.
 void game_loop(gameData *g);        // Start game
-void start_round(questions);        // Start round
+void dequeue_orders(
+    orderHead *que,                 // que of orders
+    orderHead *orderbook            // actual orderbook.
+)
 
 
 ///////////////////////////////////// MAIN /////////////////////////////////////
@@ -159,9 +176,12 @@ int main(void) {
     gameData *game = initialise_game();
     gameLobby *lobby = initialise_lobby();
 
-    game_loop(game);
+    // loop here until game start? I guess a mutex should be sufficient. 
+    // 2 threads, one to pull game data and to start looby initialisation
+    // and 1 thread to focus on game progress. 
+    // If a player leaves free all their orders but keep their spot in the game
 
-    player_rego();
+    game_loop(game, lobby);
 
     free_lobby(lobby);
     free_game(game);
@@ -226,12 +246,16 @@ void read_int(char printString[], int *destination, int lower, int upper) {
 
 ///////////////////////////////////// FREE /////////////////////////////////////
 
+// Frees every questions in game, then frees game.
 void free_game(gameData *game) {
-    for (int i = 0;i < game->question_count;i++) free_question(game->questions[i]);
+    for (int i = 0;i < game->question_count;i++) {
+        free_question(game->questions[i]);
+    }
     free(game->questions);
     free(game);
 }
 
+// Frees hints, then question
 void free_question(question *q) {
     for (int i = 0;i < q->hint_count;i++) free(q->hints[i]);
     free(q->question);
@@ -239,6 +263,7 @@ void free_question(question *q) {
     free(q);
 }
 
+// Frees every player in lobby
 void free_lobby(gameLobby *lobby) {
     for (int i = 0;i < DEFAULT_PLAYER_MAX;i++) {
         if (lobby->players[i] != NULL) free_player(lobby->players[i]);
@@ -246,6 +271,7 @@ void free_lobby(gameLobby *lobby) {
     free(lobby);
 }
 
+// Frees contents then player.
 void free_player(player *p) {
     free(p->player_name);
     free_orderHead(p->outstanding_bids);
@@ -253,6 +279,7 @@ void free_player(player *p) {
     free(p);
 }
 
+// Order is a linked list, so frres as such. 
 void free_orderHead(orderHead h) {
     order temp = h->next, prev = h->next;
 
@@ -265,12 +292,21 @@ void free_orderHead(orderHead h) {
 
 ///////////////////////////////// SEQUENCE 1a) /////////////////////////////////
 
+
 gameData *initialise_game() {
     gameData *game = malloc(sizeof(gameData));
     game->question_count = 0;
 
     printf("%s", GAME_ROUNDS);
-    read_int(GAME_ROUNDS, &game->question_count, GAME_ROUND_LOWER, GAME_ROUND_UPPER);
+
+    // Reading what intended number of game rounds should be. 
+    read_int(
+        GAME_ROUNDS, 
+        &game->question_count, 
+        GAME_ROUND_LOWER, 
+        GAME_ROUND_UPPER
+    );
+
     game->questions = malloc(game->question_count * sizeof(question *));
 
     for (
@@ -328,13 +364,10 @@ gameLobby *initialise_lobby() {
     lobby->player_count = 0;
 
     while (lobby->player_count < DEFAULT_PLAYER_MAX) {
-        initialise_player(
-            lobby->players[lobby->player_count++], 
-            lobby->player_count
-        );
+        initialise_player(lobby->players[lobby->player_count++]);
 
         printf("%s", ADD_PLAYER_QUERY);
-        if (getchar() == 'y') {
+        if (getchar() == 'n') {
             flush_input();
             break;
         }
@@ -343,10 +376,11 @@ gameLobby *initialise_lobby() {
     return lobby;
 }
 
-void *initialise_player(player *p, int i) {
+void *initialise_player(player *p) {
     p->player_name = malloc(MAX_NAME_LENGTH * sizeof(char));
     read_string(REGO_PLAYER_NAME, p->player_name, MAX_NAME_LENGTH);
-    p->player_number = i;
+    p->player_number = global_player_counter;
+    global_player_counter++;
     p->balance = 0;
     p->position = 0;
     p->asks = NULL;
@@ -355,12 +389,30 @@ void *initialise_player(player *p, int i) {
 
 ///////////////////////////////// SEQUENCE 2a) /////////////////////////////////
 
+// Start game, players can make orders. Format will be:
+// player (bid / ask) (price) (volume)
 void game_loop(gameData *g) {
-    for (g->current_question = 0;i < g->question_count;i++) {
 
-    }
 }
 
-void start_round(questions) {
+// player orders get appended to a que, orders are executed when this is called.
+void dequeue_orders(
+    orderHead *que,
+    orderHead *orderbook
+) {
+
+}
+
+// prints order book to a csv file. something that can be processed easily for
+// the visual component
+void output_orderbook(orderHead, *orderbook) {
+
+}
+
+///////////////////////////////// SEQUENCE 3a) /////////////////////////////////
+// setteling market
+// Take true value, cleanup orderbook and settle the position of everyone in the
+// orderbook. 
+void settle_game(gameData *g, gameLobby *lobby, orderHead *orderbook) {
 
 }
