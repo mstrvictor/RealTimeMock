@@ -9,9 +9,10 @@ int global_player_counter = 100;
 
 ///////////////////////////////////// MAIN /////////////////////////////////////
 
+
 int main(void) {
-    gameData *game = initialise_game();
-    gameLobby *lobby = initialise_lobby();
+    gameData    *game   = initialise_game();
+    gameLobby   *lobby  = initialise_lobby();
 
     game_loop(game);
 
@@ -21,7 +22,9 @@ int main(void) {
     return 0;
 }
 
+
 //////////////////////////////////// HELPER ////////////////////////////////////
+
 
 void flush_input() {
     int c;
@@ -76,7 +79,9 @@ void read_int(char printString[], int *destination, int lower, int upper) {
     }
 }
 
+
 ///////////////////////////////////// FREE /////////////////////////////////////
+
 
 // Frees every questions in game, then frees game.
 void free_game(gameData *game) {
@@ -121,6 +126,7 @@ void free_orderHead(orderHead *h) {
         free(prev);
     }
 }
+
 
 ///////////////////////////////// SEQUENCE 1a) /////////////////////////////////
 
@@ -227,7 +233,9 @@ void *initialise_player(player *p) {
 
 }
 
+
 ///////////////////////////////// SEQUENCE 2a) /////////////////////////////////
+
 
 // Start game, players can make orders. Format will be:
 // player (bid / ask) (price) (volume)
@@ -249,7 +257,10 @@ void output_orderbook(orderHead *orderbook) {
 
 }
 
+ 
 ///////////////////////////////// SEQUENCE 3a) /////////////////////////////////
+
+
 // setteling market
 // Take true value, cleanup orderbook and settle the position of everyone in the
 // orderbook. 
