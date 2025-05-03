@@ -34,8 +34,8 @@
 
 1. **Datastructure of orderbook?**
   
-2. Main function points to "mini-main" functions, such as main for seq 1, seq 2 etc. Make a graph/network to make everything more interpretable.
+2. **Main function points to "mini-main" functions**, such as main for seq 1, seq 2 etc. Make a graph/network to make everything more interpretable.
   
-3. Running multiple games simultaneously? Honestly thats going to be a hard ask probably only 1 game at a time. Give someone backdoor handling in the server, maybe operate everything via terminal. Or just make an admin panel UNSW quantsoc email logins to/controls.
+3. **Running multiple games simultaneously?** Honestly thats going to be a hard ask probably only 1 game at a time. Give someone backdoor handling in the server, maybe operate everything via terminal. Or just make an admin panel UNSW quantsoc email logins to/controls.
   
 4. The more I work with the project the better I understand web dev. This is the easy part lol.
