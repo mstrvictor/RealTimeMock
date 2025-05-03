@@ -13,7 +13,7 @@
 #define DEFAULT_PLAYER_MAX      30  // deafult max players
 
 // Strings when handling game creation
-#define GAME_ROUNDS         "How many rounds would you like to have"
+#define GAME_ROUNDS         "How many rounds would you like to have?: "
 
 // Strings when handling question writing
 #define STRING_WRITE_Q      "Write Question: "
@@ -40,12 +40,28 @@
 //////////////////////////////////// STRUCTS ///////////////////////////////////
 
 
-typedef struct gameQuestion     gameQuestion;
+typedef struct game             game;
 typedef struct gameData         gameData;
+typedef struct gameQuestion     gameQuestion;
+typedef struct gameLobby        gameLobby;
 typedef struct player           player;
 typedef struct orderHead        orderHead;
 typedef struct order            order;
-typedef struct gameLobby        gameLobby;
+
+// Information for individual specifics games
+typedef struct game {
+    gameData    *game_data;             // array of questions and count
+    gameLobby   *game_lobby;            // game lobby
+    orderHead   *orderbook;             // orderbook
+    orderHead   *que;                   // queue of orders
+    int     current_question;           // Current question in play
+} game;
+
+// Array of questions and total number of questions
+typedef struct gameData {
+    gameQuestion    **questions;        // Array of questions
+    int     question_count;             // Total number of questions
+} gameData;
 
 // Struct for individual questions
 typedef struct gameQuestion {
@@ -55,13 +71,11 @@ typedef struct gameQuestion {
     int     hint_count;                 // Number of hints
 } gameQuestion;
 
-// Creating games, game gets started, immutable pointers get made to
-// gameQuestion. 
-typedef struct gameData {
-    gameQuestion    **questions;        // Array of questions
-    int     current_question;           // Current question in play
-    int     question_count;             // Total number of questions
-} gameData;
+// Struct for game lobby
+typedef struct gameLobby {
+    player  **players;                  // array of pointers to players
+    int     player_count;               // count of active players
+} gameLobby;
 
 // Struct for individual players
 typedef struct player {
@@ -90,65 +104,11 @@ typedef struct order {
     orderHead   *head;                  // Head of the struct
 } order;
 
-// Struct for game lobby
-typedef struct gameLobby {
-    player  **players;                  // array of pointers to players
-    int     player_count;               // count of active players
-} gameLobby;
-
-
-//////////////////////////////////// HELPER ////////////////////////////////////
-
-
-void flush_input();                 // Flushes inputs after reading from stdin
-
-void read_string(
-    char printString[],                 // Error string
-    char *destination,                  // Pointer to string to write into
-    int strLen                          // Size of destination string
-);                                  // reads strings
-
-void read_int(
-    char printString[],                 // Error String
-    int *destination,                   // Pointer to integer to write into
-    int lower,                          // Upper bound for int
-    int upper                           // Lower bound
-);                                  // Reads an integer into an address.
-
-void error_log(
-    gameData *g,                        // game ptr
-    gameLobby *lob,                     // lobby ptr
-    orderHead *que,                     // que of orders
-    orderHead *orderbook                // orderbook ptr
-);                                  // logs errors to file
-
-
-///////////////////////////////////// FREE /////////////////////////////////////
-
-
-void free_game(
-    gameData *g                          // game ptr
-);                                  // frees game
-
-void free_question(
-    gameQuestion *q                     // question ptr
-);                                  // frees question
-
-void free_lobby(
-    gameLobby *lob                      // lobby ptr
-);                                  // free lobby
-
-void free_player(   
-    player *p                           // player ptr
-);                                  // free player
-
-void free_orderHead(
-    orderHead *ordH                     // orderHead ptr
-);                                  // free orderHead
-
 
 ///////////////////////////////// SEQUENCE 1a) /////////////////////////////////
 
+
+gameQuestion *create_questions();   // Initialise questiions
 
 gameData *initialise_game();        // Initialise game
 
@@ -173,3 +133,53 @@ void dequeue_orders(
 
 
 ///////////////////////////////// SEQUENCE 3a) /////////////////////////////////
+
+
+
+
+
+//////////////////////////////////// HELPER ////////////////////////////////////
+
+
+void flush_input();                 // Flushes inputs after reading from stdin
+
+void read_string(
+    char printString[],                 // Error string
+    char *destination,                  // Pointer to string to write into
+    int strLen                          // Size of destination string
+);                                  // reads strings
+
+void read_int(
+    char printString[],                 // Error String
+    int *destination,                   // Pointer to integer to write into
+    int lower,                          // Upper bound for int
+    int upper                           // Lower bound
+);                                  // Reads an integer into an address.
+
+void error_log(
+    game *g                             // game ptr
+);                                 // logs errors to file
+
+
+///////////////////////////////////// FREE /////////////////////////////////////
+
+
+void free_game(
+    gameData *g                          // game ptr
+);                                  // frees game
+
+void free_question(
+    gameQuestion *q                     // question ptr
+);                                  // frees question
+
+void free_lobby(
+    gameLobby *lob                      // lobby ptr
+);                                  // free lobby
+
+void free_player(   
+    player *p                           // player ptr
+);                                  // free player
+
+void free_orderHead(
+    orderHead *ordH                     // orderHead ptr
+);                                  // free orderHead

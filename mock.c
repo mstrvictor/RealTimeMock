@@ -11,130 +11,20 @@ int global_player_counter = 100;
 
 
 int main(void) {
-    gameData    *game   = initialise_game();
-    gameLobby   *lobby  = initialise_lobby();
-
-    game_loop(game);
-
-    free_lobby(lobby);
-    free_game(game);
+    // Initialise game data, then start game, can add in more functionality 
+    // later. 
+    gameData *data = initialise_game_data();
+    game *g = start_game(data);
 
     return 0;
-}
-
-
-//////////////////////////////////// HELPER ////////////////////////////////////
-
-
-void flush_input() {
-    int c;
-    while ((c = getchar()) != '\n' && c != EOF);
-}
-
-void read_string(char printString[], char *destination, int strLen) {
-    while (1) {
-        printf("%s", printString);
-        if (fgets(destination, MAX_STRING_LENGTH, stdin) == NULL) {
-            printf("%s", STRING_READ_ERROR);
-            flush_input();
-            continue;
-        }
-
-        size_t len = strlen(destination);
-        if (len > 0 && (destination[len - 1] == '\n')) {
-            destination[len - 1] = '\0';
-        }
-
-        printf("%s \"%s\": ", STRING_ERROR_CHECK, destination);
-
-        if (getchar() == 'n') {
-            flush_input();
-            break;
-        }
-    }
-}
-
-void read_int(char printString[], int *destination, int lower, int upper) {
-    while (1) {
-        printf("%s", printString);
-        if (scanf("%d", destination) != 1) {
-            printf("%s", INT_READ_ERROR);
-            flush_input();
-            continue;
-        }
-
-        flush_input();
-
-        if (*destination < lower || *destination > upper) {
-            printf("%s [%d - %d]", INT_RANGE_ERROR, lower, upper);
-            continue;
-        }
-
-        printf("%s \"%d\": ", STRING_ERROR_CHECK, *destination);
-
-        if (getchar() == 'n') {
-            flush_input();
-            break;
-        }
-    }
-}
-
-
-///////////////////////////////////// FREE /////////////////////////////////////
-
-
-// Frees every questions in game, then frees game.
-void free_game(gameData *game) {
-    for (int i = 0;i < game->question_count;i++) {
-        free_question(game->questions[i]);
-    }
-    free(game->questions);
-    free(game);
-}
-
-// Frees hints, then question
-void free_question(question *q) {
-    for (int i = 0;i < q->hint_count;i++) free(q->hints[i]);
-    free(q->question);
-    free(q->hints);
-    free(q);
-}
-
-// Frees every player in lobby
-void free_lobby(gameLobby *lobby) {
-    for (int i = 0;i < DEFAULT_PLAYER_MAX;i++) {
-        if (lobby->players[i] != NULL) free_player(lobby->players[i]);
-    } 
-    free(lobby);
-}
-
-// Frees contents then player.
-void free_player(player *p) {
-    free(p->player_name);
-    free_orderHead(p->outstanding_bids);
-    free_orderHead(p->outstanding_asks);
-    free(p);
-}
-
-// Order is a linked list, so frres as such. 
-void free_orderHead(orderHead *h) {
-    order *temp = h->next, *prev = h->next;
-
-    while (temp != NULL) {
-        prev = temp;
-        temp = temp->next;
-        free(prev);
-    }
 }
 
 
 ///////////////////////////////// SEQUENCE 1a) /////////////////////////////////
 
 
-gameData *initialise_game() {
-    gameData *game = malloc(sizeof(gameData));
-    game->question_count = 0;
-
+gameQuestion *create_questions() {
+    int question_count = 0;
     printf("%s", GAME_ROUNDS);
 
     // Reading what intended number of game rounds should be. 
@@ -144,14 +34,25 @@ gameData *initialise_game() {
         GAME_ROUND_LOWER, 
         GAME_ROUND_UPPER
     );
+}
 
-    game->questions = malloc(game->question_count * sizeof(question *));
+gameData *initialise_game() {
+    gameData *game = malloc(sizeof(gameData));
+    game->question_count = 0;
 
+    // Malloc for array of pointers to question_count
+    game->questions = malloc(
+        game->question_count * sizeof(gameQuestion *)
+    );
+
+    // Loop through number of rounds, initialise for each question.
     for (
         game->current_question = 0; 
         game->current_question < game->question_count;
         game->current_question++
-    ) game->questions[game->current_question] = initialise_question();
+    ) {
+        game->questions[game->current_question] = initialise_question();
+    }
 
     return game;
 }
@@ -267,3 +168,112 @@ void output_orderbook(orderHead *orderbook) {
 void settle_game(gameData *g, gameLobby *lobby, orderHead *orderbook) {
 
 }
+
+//////////////////////////////////// HELPER ////////////////////////////////////
+
+
+void flush_input() {
+    int c;
+    while ((c = getchar()) != '\n' && c != EOF);
+}
+
+void read_string(char printString[], char *destination, int strLen) {
+    while (1) {
+        printf("%s", printString);
+        if (fgets(destination, MAX_STRING_LENGTH, stdin) == NULL) {
+            printf("%s", STRING_READ_ERROR);
+            flush_input();
+            continue;
+        }
+
+        size_t len = strlen(destination);
+        if (len > 0 && (destination[len - 1] == '\n')) {
+            destination[len - 1] = '\0';
+        }
+
+        printf("%s \"%s\": ", STRING_ERROR_CHECK, destination);
+
+        if (getchar() == 'n') {
+            flush_input();
+            break;
+        }
+    }
+}
+
+void read_int(char printString[], int *destination, int lower, int upper) {
+    while (1) {
+        printf("%s", printString);
+        if (scanf("%d", destination) != 1) {
+            printf("%s", INT_READ_ERROR);
+            flush_input();
+            continue;
+        }
+
+        flush_input();
+
+        if (*destination < lower || *destination > upper) {
+            printf("%s [%d - %d]", INT_RANGE_ERROR, lower, upper);
+            continue;
+        }
+
+        printf("%s \"%d\": ", STRING_ERROR_CHECK, *destination);
+
+        if (getchar() == 'n') {
+            flush_input();
+            break;
+        }
+    }
+}
+
+void error_log(game *g) {
+    
+}
+
+
+///////////////////////////////////// FREE /////////////////////////////////////
+
+
+// Frees every questions in game, then frees game.
+void free_game(gameData *game) {
+    for (int i = 0;i < game->question_count;i++) {
+        free_question(game->questions[i]);
+    }
+    free(game->questions);
+    free(game);
+}
+
+// Frees hints, then question
+void free_question(question *q) {
+    for (int i = 0;i < q->hint_count;i++) free(q->hints[i]);
+    free(q->question);
+    free(q->hints);
+    free(q);
+}
+
+// Frees every player in lobby
+void free_lobby(gameLobby *lobby) {
+    for (int i = 0;i < DEFAULT_PLAYER_MAX;i++) {
+        if (lobby->players[i] != NULL) free_player(lobby->players[i]);
+    } 
+    free(lobby);
+}
+
+// Frees contents then player.
+void free_player(player *p) {
+    free(p->player_name);
+    free_orderHead(p->outstanding_bids);
+    free_orderHead(p->outstanding_asks);
+    free(p);
+}
+
+// Order is a linked list, so frres as such. 
+void free_orderHead(orderHead *h) {
+    order *temp = h->next, *prev = h->next;
+
+    while (temp != NULL) {
+        prev = temp;
+        temp = temp->next;
+        free(prev);
+    }
+}
+
