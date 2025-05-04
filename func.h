@@ -1,3 +1,28 @@
+/*
+** File: func.h
+** Project: QuantSoc Mock Real Time Mock Trading
+*/
+
+/******************************************************************************
+ ***                               H E A D E R                              ***
+ ******************************************************************************
+ *                                                                            *
+ *                 Project Name :                                             *
+ *                                                                            *
+ *                       Author::                                             *
+ *                                                                            *
+ *----------------------------------------------------------------------------*
+ * Functions:                                                                 *
+ * - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -  - - - - -*/
+
+
+#include <ctype.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <stdbool.h>
+
+
 // Constants
 #define MAX_STRING_LENGTH   200     // Max length of any string
 #define MAX_NAME_LENGTH     20      // Max player name length
@@ -11,16 +36,21 @@
 
 #define DEFAULT_POSITION_LIMIT  30  // default position limit
 #define DEFAULT_PLAYER_MAX      30  // deafult max players
+#define DEFAULT_ORDERBOOK_SIZE  1000    // default orderbook size
+#define DEFAULT_PRICE_MAX       1000    // default max orders
+#define DEFAULT_PRICE_MIN      1    // Minimum price
 
 // Strings when handling game creation
 #define GAME_ROUNDS         "How many rounds would you like to have?: "
 
 // Strings when handling question writing
 #define STRING_WRITE_Q      "Write Question: "
+
 #define STRING_WRITE_ANS    "Whats the answer: "
+
 #define STRING_WRITE_HINT   "Whats your hint: "
-#define STRING_ADD_HINT     "Would you like to add a hint"
-#define STRING_MORE_HINT    "Would you like to add another hint"
+#define STRING_ADD_HINT     "Would you like to add a hint: "
+#define STRING_MORE_HINT    "Would you like to add another hint: "
 #define STRING_MAX_HINTS    "Max hints reached"
 #define YES_NO              "(\"y\" or \"n\")"
 
@@ -29,11 +59,14 @@
 #define STRING_READ_ERROR   "Error reading input. Please try again"
 
 // Error strings for reading integers
-#define INT_READ_ERROR      "Invalid input. Please enter a valid integer."
+#define INT_READ_ERROR      "Invalid input. Please enter a valid integer.\n"
 #define INT_RANGE_ERROR     "Input out of range"
 
+// Answer with 'y' or 'n'
+#define STRING_ANSWER_ERROR "Please answer with \"y\" or \"n\": "
+
 // Strings for adding players
-#define ADD_PLAYER_QUERY    "Add another player"
+#define ADD_PLAYER_QUERY    "Add another player: "
 #define REGO_PLAYER_NAME    "Player name: "
 
 
@@ -50,8 +83,8 @@ typedef struct order            order;
 
 // Information for individual specifics games
 typedef struct game {
-    gameData    *game_data;             // array of questions and count
-    gameLobby   *game_lobby;            // game lobby
+    gameData    *data;                  // array of questions and count
+    gameLobby   *lobby;                 // game lobby
     orderHead   *orderbook;             // orderbook
     orderHead   *que;                   // queue of orders
     int     current_question;           // Current question in play
@@ -60,7 +93,7 @@ typedef struct game {
 // Array of questions and total number of questions
 typedef struct gameData {
     gameQuestion    **questions;        // Array of questions
-    int     question_count;             // Total number of questions
+    int     count;                      // Total number of questions
 } gameData;
 
 // Struct for individual questions
@@ -108,15 +141,15 @@ typedef struct order {
 ///////////////////////////////// SEQUENCE 1a) /////////////////////////////////
 
 
-gameQuestion *create_questions();   // Initialise questiions
+game *initialise_game();
 
-gameData *initialise_game();        // Initialise game
+gameData *initialise_game_data();
 
-gameQuestion *initialise_question();    // initialise questions
+gameQuestion *initialise_question();
 
-gameLobby *initialise_lobby();      // Initialise lobby
+gameLobby *initialise_lobby();
 
-player *initialise_player();        // initialise players
+player *initialise_player();
 
 
 ///////////////////////////////// SEQUENCE 2a) /////////////////////////////////
@@ -156,17 +189,44 @@ void read_int(
     int upper                           // Lower bound
 );                                  // Reads an integer into an address.
 
-void error_log(
-    game *g                             // game ptr
-);                                 // logs errors to file
+bool check_response() {
+    char temp;
+
+    while ((temp = tolower(getchar())) != 'y') {
+        if (temp == 'n') {
+            flush_input();
+            return false;
+        } else if (temp != 'y') {
+            printf("%s", STRING_ANSWER_ERROR);
+            flush_input();
+            continue;
+        }
+    }
+
+    return true;
+}
+
+void game_log(
+    game *g,                            // game ptr
+    char mode                           // mode of logging   
+);                                  // logs errors to file
+
+void print_orderbook(
+    orderHead *orderbook,               // orderbook ptr
+    char mode                           // mode of printing      
+);                                  // prints orderbook to terminal or file
 
 
 ///////////////////////////////////// FREE /////////////////////////////////////
 
 
 void free_game(
-    gameData *g                          // game ptr
+    game *g                             // game ptr
 );                                  // frees game
+
+void free_game_data(
+    gameData *data                      // game data ptr
+);                                  // frees game data
 
 void free_question(
     gameQuestion *q                     // question ptr

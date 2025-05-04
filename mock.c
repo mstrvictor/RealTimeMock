@@ -1,8 +1,23 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+/*
+** File: mock.c
+** Project: QuantSoc Mock Real Time Mock Trading
+*/
 
-#include "func.h"       // Function headers
+/******************************************************************************
+ ***                               H E A D E R                              ***
+ ******************************************************************************
+ *                                                                            *
+ *                 Project Name :                                             *
+ *                                                                            *
+ *                       Author::                                             *
+ *                                                                            *
+ *----------------------------------------------------------------------------*
+ * Functions:                                                                 *
+ * - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -  - - - - -*/
+
+
+#include "func.h"
+
 
 // Global variable tracking player_count and used in assinging player numbers
 int global_player_counter = 100;
@@ -11,11 +26,11 @@ int global_player_counter = 100;
 
 
 int main(void) {
-    // Initialise game data, then start game, can add in more functionality 
-    // later. 
-    gameData *data = initialise_game_data();
-    game *g = start_game(data);
+    game *g = initialise_game();
 
+    game_log(g, 't');
+
+    free_game(g);
     return 0;
 }
 
@@ -23,67 +38,84 @@ int main(void) {
 ///////////////////////////////// SEQUENCE 1a) /////////////////////////////////
 
 
-gameQuestion *create_questions() {
-    int question_count = 0;
-    printf("%s", GAME_ROUNDS);
-
-    // Reading what intended number of game rounds should be. 
-    read_int(
-        GAME_ROUNDS, 
-        &game->question_count, 
-        GAME_ROUND_LOWER, 
-        GAME_ROUND_UPPER
-    );
-}
-
-gameData *initialise_game() {
-    gameData *game = malloc(sizeof(gameData));
-    game->question_count = 0;
-
-    // Malloc for array of pointers to question_count
-    game->questions = malloc(
-        game->question_count * sizeof(gameQuestion *)
+game *initialise_game() {
+    game *g = malloc(sizeof(game));
+    g->data = initialise_game_data();
+    g->lobby = initialise_lobby();
+    g->orderbook = malloc(
+        DEFAULT_ORDERBOOK_SIZE * sizeof(orderHead *)
     );
 
-    // Loop through number of rounds, initialise for each question.
-    for (
-        game->current_question = 0; 
-        game->current_question < game->question_count;
-        game->current_question++
-    ) {
-        game->questions[game->current_question] = initialise_question();
+    for (int i = 0;i < DEFAULT_ORDERBOOK_SIZE;i++) {
+        g->orderbook = NULL;
     }
 
-    return game;
+    g->que = NULL;
+
+    g->current_question = 0;
+
+    return g;
 }
 
-question *initialise_question() {
-    question *q = malloc(sizeof(question));
+gameData *initialise_game_data() {
+    gameData *data = malloc(sizeof(gameData));
+
+    // How many rounds of questions in this game?
+    read_int(
+        GAME_ROUNDS,
+        &data->count,
+        GAME_ROUND_LOWER,
+        GAME_ROUND_UPPER
+    );
+ 
+   // Malloc for array of pointers to question_count
+    data->questions = malloc(data->count * sizeof(gameQuestion *));
+    
+    // Initialise each question
+    for (int i = 0;i < data->count;i++) {
+        data->questions[i] = initialise_question();
+    }
+
+    return data;
+}
+
+gameQuestion *initialise_question() {
+    gameQuestion *q = malloc(sizeof(gameQuestion));
     q->question = malloc(MAX_STRING_LENGTH * sizeof(char));
     q->hints = malloc(MAX_HINTS * sizeof(char *));
     q->hint_count = 0;
 
-    for (int i = 0; i < MAX_HINTS; i++) q->hints[i] = NULL;
-
     // Read question
-    read_string(STRING_WRITE_Q, q->question, MAX_STRING_LENGTH);
+    read_string(
+        STRING_WRITE_Q, 
+        q->question, 
+        MAX_STRING_LENGTH
+    );
 
     // Read answer
-    read_int(STRING_WRITE_ANS, &q->answer, ANSWER_LOWER, ANSWER_UPPER);
+    read_int(
+        STRING_WRITE_ANS,
+        &q->answer,
+        ANSWER_LOWER,
+        ANSWER_UPPER
+    );
 
     // Add hint
     printf("%s", STRING_ADD_HINT);
     char user_input = getchar();
-    flush_input();
 
     while (user_input == 'y') {
         flush_input();
         q->hints[q->hint_count] = malloc(MAX_STRING_LENGTH * sizeof(char));
+
+        // Read hint
         read_string(
             STRING_WRITE_HINT, 
-            q->hints[q->hint_count++], 
+            q->hints[q->hint_count], 
             MAX_STRING_LENGTH
         );
+
+        q->hint_count++;
 
         if (q->hint_count < MAX_HINTS) {
             printf("%s", STRING_MORE_HINT);
@@ -93,21 +125,24 @@ question *initialise_question() {
         }
     }
 
+    flush_input();
+
     return q;
 }
 
 gameLobby *initialise_lobby() {
     gameLobby *lobby = malloc(sizeof(gameLobby));
-    lobby->players = malloc(DEFAULT_PLAYER_MAX * sizeof(player));
-    for (int i = 0;i < DEFAULT_PLAYER_MAX;i++) lobby->players[i] = NULL;
+    lobby->players = malloc(DEFAULT_PLAYER_MAX * sizeof(player *));
     lobby->player_count = 0;
 
     while (lobby->player_count < DEFAULT_PLAYER_MAX) {
-        initialise_player(lobby->players[lobby->player_count++]);
+        lobby->players[lobby->player_count] = initialise_player();
+        lobby->player_count++;
 
         printf("%s", ADD_PLAYER_QUERY);
-        if (getchar() == 'n') {
-            flush_input();
+        if (check_response()) {
+            continue;
+        } else {
             break;
         }
     }
@@ -115,23 +150,33 @@ gameLobby *initialise_lobby() {
     return lobby;
 }
 
-void *initialise_player(player *p) {
+player *initialise_player() {
+    player *p = malloc(sizeof(player));
+
     p->player_name = malloc(MAX_NAME_LENGTH * sizeof(char));
-    read_string(REGO_PLAYER_NAME, p->player_name, MAX_NAME_LENGTH);
-    p->player_number = global_player_counter;
-    global_player_counter++;
+
+    read_string(
+        REGO_PLAYER_NAME,
+        p->player_name,
+        MAX_NAME_LENGTH
+    );
+
+    p->player_number = global_player_counter++;
+
     p->balance = 0;
     p->position = 0;
+
     p->outstanding_bids = malloc(sizeof(orderHead));
     p->outstanding_bids->next = NULL;
     p->outstanding_bids->volume = 0;
     p->outstanding_bids->price = 0;
+
     p->outstanding_asks = malloc(sizeof(orderHead));
     p->outstanding_asks->next = NULL;
     p->outstanding_asks->volume = 0;
     p->outstanding_asks->price = 0;
-    return p;
 
+    return p;
 }
 
 
@@ -152,13 +197,7 @@ void dequeue_orders(
 
 }
 
-// prints order book to a csv file. something that can be processed easily for
-// the visual component
-void output_orderbook(orderHead *orderbook) {
 
-}
-
- 
 ///////////////////////////////// SEQUENCE 3a) /////////////////////////////////
 
 
@@ -193,8 +232,9 @@ void read_string(char printString[], char *destination, int strLen) {
 
         printf("%s \"%s\": ", STRING_ERROR_CHECK, destination);
 
-        if (getchar() == 'n') {
-            flush_input();
+        if (check_response()) {
+            continue;
+        } else {
             break;
         }
     }
@@ -218,56 +258,104 @@ void read_int(char printString[], int *destination, int lower, int upper) {
 
         printf("%s \"%d\": ", STRING_ERROR_CHECK, *destination);
 
-        if (getchar() == 'n') {
-            flush_input();
+        if (check_response()) {
+            continue;
+        } else {
             break;
         }
     }
 }
 
-void error_log(game *g) {
-    
+void game_log(game *g, char mode) {
+    if (mode == 't') {
+        // Print to terminal
+        printf("Game data:\n");
+        printf("Number of rounds: %d\n", g->data->count);
+        printf("Current question: %d\n", g->current_question);
+
+        for (int i = 0;i < g->data->count;i++) {
+            printf("Question %d: %s\n", i + 1, g->data->questions[i]->question);
+            printf("Answer: %d\n", g->data->questions[i]->answer);
+            printf("Hints:\n");
+            for (int j = 0;j < g->data->questions[i]->hint_count;j++) {
+                printf("\t%d: %s\n", j, g->data->questions[i]->hints[j]);
+            }
+        }
+
+        printf("Orderbook data:\n");
+
+    } else if (mode == 'f') {
+        // Print to file
+
+    } else {
+        printf("Invalid mode");
+
+    }
 }
+
 
 
 ///////////////////////////////////// FREE /////////////////////////////////////
 
 
-// Frees every questions in game, then frees game.
-void free_game(gameData *game) {
-    for (int i = 0;i < game->question_count;i++) {
-        free_question(game->questions[i]);
-    }
-    free(game->questions);
-    free(game);
+// Frees contents of game struct then game
+void free_game(game *g) {
+    free_game_data(g->data);
+
+    free_lobby(g->lobby);
+
+    free_orderHead(g->orderbook);
+    free_orderHead(g->que);
+
+    free(g);
 }
 
-// Frees hints, then question
-void free_question(question *q) {
+// Frees array of questions then gameData
+void free_game_data(gameData *data) {
+    for (int i = 0;i < data->count;i++) {
+        free_question(data->questions[i]);
+    }
+
+    free(data->questions);
+    free(data);
+}
+
+// Frees hints, then answer string, then question
+void free_question(gameQuestion *q) {
     for (int i = 0;i < q->hint_count;i++) free(q->hints[i]);
-    free(q->question);
     free(q->hints);
+
+    free(q->question);
+
     free(q);
 }
 
-// Frees every player in lobby
-void free_lobby(gameLobby *lobby) {
+// Frees every active player in lobby
+void free_lobby(gameLobby *lob) {
     for (int i = 0;i < DEFAULT_PLAYER_MAX;i++) {
-        if (lobby->players[i] != NULL) free_player(lobby->players[i]);
+        // Listed as such since players can leave game, so an entry between
+        // active players can be NULL.
+        if (!lob->players[i]) free_player(lob->players[i]);
     } 
-    free(lobby);
+
+    free(lob->players);
+    free(lob);
 }
 
 // Frees contents then player.
 void free_player(player *p) {
     free(p->player_name);
+
     free_orderHead(p->outstanding_bids);
     free_orderHead(p->outstanding_asks);
+
     free(p);
 }
 
 // Order is a linked list, so frres as such. 
 void free_orderHead(orderHead *h) {
+    if (!h) return;
+
     order *temp = h->next, *prev = h->next;
 
     while (temp != NULL) {
@@ -275,5 +363,7 @@ void free_orderHead(orderHead *h) {
         temp = temp->next;
         free(prev);
     }
+
+    free(h);
 }
 
