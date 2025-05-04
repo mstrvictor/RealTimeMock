@@ -30,12 +30,16 @@ int main(void) {
 
     game_log(g, 't');
 
+    game_loop(g);
+
+    game_log(g, 't');
+
     free_game(g);
     return 0;
 }
 
 
-///////////////////////////////// SEQUENCE 1a) /////////////////////////////////
+/////////////////////////////////  SEQUENCE 1  /////////////////////////////////
 
 
 game *initialise_game() {
@@ -47,10 +51,14 @@ game *initialise_game() {
     );
 
     for (int i = 0;i < DEFAULT_ORDERBOOK_SIZE;i++) {
-        g->orderbook = NULL;
+        g->orderbook[i] = NULL;
     }
 
-    g->que = NULL;
+    g->que = malloc(sizeof(orderHead));
+    g->que->next = NULL;
+    g->que->tail = NULL;
+    g->que->volume = 0;
+    g->que->price = 0;
 
     g->current_question = 0;
 
@@ -180,33 +188,144 @@ player *initialise_player() {
 }
 
 
-///////////////////////////////// SEQUENCE 2a) /////////////////////////////////
+/////////////////////////////////  SEQUENCE 2  /////////////////////////////////
 
 
-// Start game, players can make orders. Format will be:
-// player (bid / ask) (price) (volume)
-void game_loop(gameData *g) {
+// Start game, players can make orders
+void game_loop(game *g) {
+    char input;
 
+    while ((input = tolower(getchar())) != EOF) {
+        flush_input();
+
+        if (input == 'q') {
+            dequeue_orders(g->que, g->orderbook);
+            break;
+
+        } else if (input == 'o') {
+            char player_name[MAX_NAME_LENGTH];
+            char order_str[ORDER_STR_LENGTH];
+
+            read_string(
+                REGO_PLAYER_NAME,
+                player_name, 
+                MAX_NAME_LENGTH
+            );
+
+            player *p = find_player(g->lobby, player_name);
+
+            if (!p) {
+                printf("%s", PLAYER_NOT_FOUND);
+                continue;
+            }
+
+            read_string(
+                ORDER_WRITE,
+                order_str,
+                ORDER_STR_LENGTH
+            );
+
+            order *ord = write_order(order_str, p);
+            if (ord) {
+                ord->prev = g->que->tail;
+                g->que->tail->next = ord;
+                g->que->tail = ord;
+            }
+
+        } else if (input == 'h'){
+            // print help
+            print_help();
+
+        } else if (input == 'd') {
+            // Dequeue all orders
+            dequeue_orders(g->que, g->orderbook);
+
+        } else if (input == 's') {
+            // Print orderbook
+            print_orderbook(g->orderbook);
+
+        } else {
+            printf("%s", STRING_READ_ERROR);
+
+        }
+    }
+}
+
+// Create an order from an order string. 
+order *write_order(char *order_str, player *p) {
+    order *ord = malloc(sizeof(order));
+    char *token = NULL;
+
+    token = strtok(order_str, "/");
+    if (strcmp(token, "B") == 0) {
+        ord->type = 'B';
+    } else if (strcmp(token, "A") == 0) {
+        ord->type = 'A';
+    } else {
+        printf("%s", ORDER_STR_ERROR);
+        free(ord);
+        return NULL;
+    }
+
+    token = strtok(NULL, "/");
+    ord->price = atoi(token);
+    if (
+        ord->price <= DEFAULT_PRICE_MIN ||
+        ord->price >= DEFAULT_PRICE_MAX
+    ) {
+        printf("%s", ORDER_STR_ERROR);
+        free(ord);
+        return NULL;
+    }
+
+    token = strtok(NULL, "/");
+    ord->volume = atoi(token);
+    int standing = p->position;
+
+    if (ord->type == 'B') {
+        standing += p->outstanding_bids->volume;
+    } else {
+        standing += p->outstanding_asks->volume;
+    }
+
+    if (standing + ord->volume > DEFAULT_POSITION_LIMIT) {
+        printf("%s", ORDER_STR_ERROR_2);
+        free(ord);
+        return NULL;
+    }
+
+    ord->owner = p;
+    ord->next = NULL;
+    ord->prev = NULL;
+    ord->head = NULL;
+    
+    return ord;
 }
 
 // player orders get appended to a que, orders are executed when this is called.
-void dequeue_orders(
-    orderHead *que,
-    orderHead *orderbook
-) {
+void dequeue_orders(orderHead *que, orderHead **orderbook) {
+    order *temp = que->next, *order = NULL;
+    orderHead *head = NULL;
+
+    while (temp) {
+        if (temp->type == 'B') {
+            match_bid(orderb, temp);
+        }
+    }
 
 }
 
-
-///////////////////////////////// SEQUENCE 3a) /////////////////////////////////
-
-
-// setteling market
-// Take true value, cleanup orderbook and settle the position of everyone in the
-// orderbook. 
-void settle_game(gameData *g, gameLobby *lobby, orderHead *orderbook) {
+void match_bid(orderHead *orderbook, order *ord) {
 
 }
+
+void match_ask(orderHead *orderbook, order *ord) {
+
+}
+
+/////////////////////////////////  SEQUENCE 3  /////////////////////////////////
+
+
 
 //////////////////////////////////// HELPER ////////////////////////////////////
 
@@ -273,6 +392,7 @@ void game_log(game *g, char mode) {
         printf("Number of rounds: %d\n", g->data->count);
         printf("Current question: %d\n", g->current_question);
 
+        // priknts info about questions
         for (int i = 0;i < g->data->count;i++) {
             printf("Question %d: %s\n", i + 1, g->data->questions[i]->question);
             printf("Answer: %d\n", g->data->questions[i]->answer);
@@ -282,7 +402,22 @@ void game_log(game *g, char mode) {
             }
         }
 
+        // prints out orderbook
         printf("Orderbook data:\n");
+        printf("||----||-----||----||\n");
+        printf("||Bids||Price||Asks||\n");
+        printf("||----||-----||----||\n");
+        for (int i = 999;i >= 0;i--) {
+            orderHead *temp = g->orderbook[i];
+            if (temp) {
+                if (temp->volume > 0) {
+                    printf("||----||-%03d-||%04d||\n", (i + 1), temp->volume);
+                } else if (temp->volume < 0){
+                    printf("||%04d||-%03d-||----||\n", temp->volume, (i + i));
+                }
+            }
+        }
+        printf("||----||-----||----||\n");
 
     } else if (mode == 'f') {
         // Print to file
@@ -293,6 +428,55 @@ void game_log(game *g, char mode) {
     }
 }
 
+void print_orderbook(orderHead **orderbook) {
+    // prints out orderbook
+    printf("Orderbook data:\n");
+    printf("||----||-----||----||\n");
+    printf("||Bids||Price||Asks||\n");
+    printf("||----||-----||----||\n");
+    for (int i = 999;i >= 0;i--) {
+        orderHead *temp = orderbook[i];
+        if (temp) {
+            if (temp->volume > 0) {
+                printf("||----||-%03d-||%04d||\n", (i + 1), temp->volume);
+            } else if (temp->volume < 0){
+                printf("||%04d||-%03d-||----||\n", temp->volume, (i + i));
+            }
+        }
+    }
+    printf("||----||-----||----||\n");
+}
+
+bool check_response() {
+    char temp;
+
+    while ((temp = tolower(getchar())) != 'y') {
+        if (temp == 'n') {
+            flush_input();
+            return false;
+        } else if (temp != 'y') {
+            printf("%s", STRING_ANSWER_ERROR);
+            flush_input();
+            continue;
+        }
+    }
+
+    return true;
+}
+
+player *find_player(gameLobby *lob, char *name) {
+    // finds player in lobby
+    for (int i = 0;i < DEFAULT_PLAYER_MAX;i++) {
+        if (
+            lob->players[i] && 
+            strcmp(lob->players[i]->player_name, name) == 0
+        ) {
+            return lob->players[i];
+        }
+    }
+
+    return NULL;
+}
 
 
 ///////////////////////////////////// FREE /////////////////////////////////////
@@ -304,7 +488,9 @@ void free_game(game *g) {
 
     free_lobby(g->lobby);
 
-    free_orderHead(g->orderbook);
+    for (int i = 0;i < DEFAULT_ORDERBOOK_SIZE;i++) {
+        free_orderHead(g->orderbook[i]);
+    }
     free_orderHead(g->que);
 
     free(g);
@@ -352,7 +538,7 @@ void free_player(player *p) {
     free(p);
 }
 
-// Order is a linked list, so frres as such. 
+// Order is a linked list, so frees as such. 
 void free_orderHead(orderHead *h) {
     if (!h) return;
 

@@ -27,6 +27,7 @@
 #define MAX_STRING_LENGTH   200     // Max length of any string
 #define MAX_NAME_LENGTH     20      // Max player name length
 #define MAX_HINTS           10      // Max hints for any question
+#define ORDER_STR_LENGTH    10      // Max length of order string
 
 #define ANSWER_UPPER        1000    // upper/lower bound for integer answers
 #define ANSWER_LOWER        1
@@ -38,7 +39,7 @@
 #define DEFAULT_PLAYER_MAX      30  // deafult max players
 #define DEFAULT_ORDERBOOK_SIZE  1000    // default orderbook size
 #define DEFAULT_PRICE_MAX       1000    // default max orders
-#define DEFAULT_PRICE_MIN      1    // Minimum price
+#define DEFAULT_PRICE_MIN       0   // Minimum price
 
 // Strings when handling game creation
 #define GAME_ROUNDS         "How many rounds would you like to have?: "
@@ -69,6 +70,14 @@
 #define ADD_PLAYER_QUERY    "Add another player: "
 #define REGO_PLAYER_NAME    "Player name: "
 
+// Strings for making orders
+#define PLAYER_NOT_FOUND   "Player not found in lobby.\n"
+
+#define ORDER_WRITE        "Input order (PRICE/VOLUME/(BID (B) / ASK (A))): "
+
+#define ORDER_STR_ERROR    "Invalid order string.\n"
+#define ORDER_STR_ERROR_2  "Position limit reached.\n"
+
 
 //////////////////////////////////// STRUCTS ///////////////////////////////////
 
@@ -78,6 +87,7 @@ typedef struct gameData         gameData;
 typedef struct gameQuestion     gameQuestion;
 typedef struct gameLobby        gameLobby;
 typedef struct player           player;
+typedef struct orderbook        orderbook;
 typedef struct orderHead        orderHead;
 typedef struct order            order;
 
@@ -85,7 +95,7 @@ typedef struct order            order;
 typedef struct game {
     gameData    *data;                  // array of questions and count
     gameLobby   *lobby;                 // game lobby
-    orderHead   *orderbook;             // orderbook
+    orderbook   *orderbook;             // orderbook
     orderHead   *que;                   // queue of orders
     int     current_question;           // Current question in play
 } game;
@@ -120,9 +130,17 @@ typedef struct player {
     orderHead   *outstanding_asks;      // outstanding asks
 } player;
 
+// Struct for orderbook 
+typedef struct orderbook {
+    orderHead   **orderbook;            // orderbook
+    order   *bid_high;                  // higheest bid
+    order   *ask_low;                   // lowest ask
+} orderbook;
+
 // Struct for orderbook
 typedef struct orderHead {
     order   *next;                      // points to first order
+    order   *tail;                      // points to end
     int     volume;                     // + for asks, - for bids
     int     price;                      // use in orderbook not in player orders
 } orderHead;
@@ -130,8 +148,9 @@ typedef struct orderHead {
 // Struct for order
 typedef struct order {
     player  *owner;                     // Player that owns it
-    int     hashkey;                    // Which order it is
     int     volume;                     // + for asks, - for bids
+    int     price;                      // Price of order
+    char    type;                       // 'A' for ask, 'B' for bid
     order   *next;                      // Next in line
     order   *prev;                      // Prev, can point to head, NULL if 1st
     orderHead   *head;                  // Head of the struct
@@ -156,18 +175,31 @@ player *initialise_player();
 
 
 void game_loop(
-    gameData *g                         // game data
+    game *g                             // game data
 );                                  // Start game
+
+order *write_order(
+    char *order_str,
+    player *p
+);
 
 void dequeue_orders(
     orderHead *que,                     // que of orders
-    orderHead *orderbook                // actual orderbook.
+    orderHead **orderbook               // actual orderbook.
 );                                  // dequeue orders
+
+void match_bid(
+    orderHead *orderbook,
+    order *ord
+);                                  // match bid orders  
+
+void match_ask(
+    orderHead *orderbook,
+    order *ord
+);                                  // match ask orders 
 
 
 ///////////////////////////////// SEQUENCE 3a) /////////////////////////////////
-
-
 
 
 
@@ -189,32 +221,28 @@ void read_int(
     int upper                           // Lower bound
 );                                  // Reads an integer into an address.
 
-bool check_response() {
-    char temp;
-
-    while ((temp = tolower(getchar())) != 'y') {
-        if (temp == 'n') {
-            flush_input();
-            return false;
-        } else if (temp != 'y') {
-            printf("%s", STRING_ANSWER_ERROR);
-            flush_input();
-            continue;
-        }
-    }
-
-    return true;
-}
-
 void game_log(
     game *g,                            // game ptr
     char mode                           // mode of logging   
 );                                  // logs errors to file
 
 void print_orderbook(
-    orderHead *orderbook,               // orderbook ptr
-    char mode                           // mode of printing      
+    orderHead **orderbook                // orderbook ptr    
 );                                  // prints orderbook to terminal or file
+
+bool check_response() ;             // Checks if the response is 'y' or 'n'
+
+void print_help();                  // Prints help menu
+
+void append_order(
+    orderHead *head,                    // orderhead to appened to
+    order *ord                          // order to append
+);                                  // appends order to orderhead
+
+player *find_player(
+    gameLobby *lob,                     // game lobby
+    char *name                          // name of player
+);                                  // finds player in lobby
 
 
 ///////////////////////////////////// FREE /////////////////////////////////////
