@@ -1,46 +1,93 @@
 /*
-** File: mock.c
+** File: helper_main.h
 ** Project: QuantSoc Mock Real Time Mock Trading
 */
 
 /******************************************************************************
- ***                               H E A D E R                              ***
+ ***                         H E L P E R    M A I N                         ***
  ******************************************************************************
  *                                                                            *
- *                 Project Name :                                             *
+ *                 Project Name : QuantSoc Real Time                          *
+ *                                Mock Trading Game                           *                      *
  *                                                                            *
- *                       Author::                                             *
+ *                       Author:: Victor Tang                                 *
  *                                                                            *
  *----------------------------------------------------------------------------*
- * Functions:                                                                 *
- * - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -  - - - - -*/
+ *		Function body of helper structs functions and helpers.			      *
+ * - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
 
 
-#include "func.h"
+#include "helper_def.h"
+
+//////////////////////////////////// STRUCTS ///////////////////////////////////
 
 
-// Global variable tracking player_count and used in assinging player numbers
-int global_player_counter = 100;
+typedef struct game {
+    gameData    *data;                  // array of questions and count
+    gameLobby   *lobby;                 // game lobby
+    orderbook   *orderbook;             // orderbook
+    orderHead   *que;                   // queue of orders
+    int     currQ;           			// Current question in play
+} game;
 
-///////////////////////////////////// MAIN /////////////////////////////////////
+typedef struct gameData {
+    gameQuestion    **questions;        // Array of questions
+    int     count;                      // Total number of questions
+} gameData;
 
+typedef struct gameQuestion {
+    char    *question;                  // String of question
+    int     answer;                     // Answer
+    char    **hints;                    // Array of strings that are hints
+    int     hint_count;                 // Number of hints
+} gameQuestion;
 
-int main(void) {
-    game *g = initialise_game();
+typedef struct gameLobby {
+    player  **players;                  // array of pointers to players
+    int     player_count;               // count of active players
+} gameLobby;
 
-    game_log(g, 't');
+typedef struct player {
+    char    *player_name;               // player name
+    int     player_number;              // player identifier
+    int     balance;                    // current balance
+    int     position;                   // position
+	order   *orders;                   	// orders player has
+	int 	size;						// size of orders
+	int 	count;						// number of orders placed by player
+} player;
 
-    game_loop(g);
+typedef struct orderbook {
+    orderHead   *bid_high;              // highest bid
+    orderHead   *ask_low;               // lowest ask
+    orderHead   *ask_high;              // highest ask. for printing orderbook
+} orderbook;
 
-    game_log(g, 't');
+typedef struct orderHead {
+    order   **list;                     // list of orders
+    int     count;                      // number of orders
+    int     size;                  		// size of list
+    int     volume;                     // + for asks, - for bids
+    int     price;                      // Price of orders
+    orderHead  *next;                   // next orderhead
+    orderHead  *prev;                   // prev orderhead
+} orderHead;
 
-    free_game(g);
-    return 0;
-}
+typedef struct order {
+    player  *owner;                     // Player that owns it
+	int    order_number;                // Order number (player specific)
+    int     volume;                     // 
+    int     price;                      // 
+    char    type;                       // 'A' for ask, 'B' for bid
+	order   *next;                      // Next order in orderbook
+    order   *prev;                      // Previous order
+} order;
 
 
 /////////////////////////////////  SEQUENCE 1  /////////////////////////////////
 
+
+int global_player_counter = 100;
 
 game *initialise_game() {
     game *g = malloc(sizeof(game));
@@ -138,7 +185,9 @@ gameQuestion *initialise_question() {
 
 gameLobby *initialise_lobby() {
     gameLobby *lobby = malloc(sizeof(gameLobby));
+    
     lobby->players = malloc(DEFAULT_PLAYER_MAX * sizeof(player *));
+
     lobby->player_count = 0;
 
     while (lobby->player_count < DEFAULT_PLAYER_MAX) {
@@ -174,6 +223,8 @@ orderHead *initialise_orderHead() {
     h->price = -1;
     h->next = NULL;
     h->prev = NULL;
+
+    for (int i = 0;i < h->size;i++) h->list[i] = NULL;
 
     return h;
 }
@@ -216,23 +267,19 @@ void game_loop(game *g) {
     while ((input = tolower(getchar())) != EOF) {
         flush_input();
 
+        // segments for progresing games?
         if (input == 'q') {\
-            // deque orders and break from loop;
-            deque_orders(g->que, g->orderbook);
+            // end game
+            printf("Game ended\n");
             return;
 
         } else if (input == 'o') {
             order *ord = parse_order(g);
 
-            if (ord) append_order(g->que, ord);
-
+            match_order(ord, g->orderbook);
         } else if (input == 'h'){
             // print help
             print_help();
-
-        } else if (input == 'd') {
-            // Dequeue all orders
-            deque_orders(g->que, g->orderbook);
 
         } else if (input == 's') {
             // Print orderbook
@@ -324,6 +371,7 @@ order *create_order(char *order_str, player *p) {
     return ord;
 }
 
+// Appends order to orderhead type
 void append_order(orderHead *head, order *ord) {
     // check if head is NULL
     if (!head) {
@@ -344,33 +392,73 @@ void append_order(orderHead *head, order *ord) {
     head->count++;
 }
 
-// player orders get appended to a que, orders are executed when this is called.
-void deque_orders(orderHead *que, orderbook *orderbook) {
-    for (int i = 0;i < que->count;i++) {
-            order *ord = que->list[i];
+// Tries to match order with orderbook, if fail then appends to orderbook.
+void match_order(order *ord, orderbook *book) {
+    if (ord->type == 'B') {
+        if (book->ask_low->price <= ord->price) {
+            match_bid(book->ask_low, ord);
+        } 
 
-            if (ord->type == 'B') {
-                match_bid(orderbook, ord);
-            } else if (ord->type == 'A') {
-                match_ask(orderbook, ord);
-            }
-
-            // free order
-            free(ord);
+    } else if (ord->type == 'A') {
+        if (book->bid_high->price >= ord->price) {
+            match_ask(book->bid_high, ord);
         }
 
-        // free orderhead
-        free(que);
-        que = initialise_orderHead();
+
+    }
 }
 
-void match_bid(orderbook *orderbook, order *ord) {
+void match_bid(orderHead *node, order *ord) {
+    int i = 0;
+    order *temp = NULL;
+
+    for (
+        i = 0;
+        (ord->volume > 0 && i < node->count);
+        i++
+    ) {
+        temp = node->list[i];
+        
+        if (temp->volume > ord->volume) {
+            // if temp volume is greater then order volume
+            // add money to owner
+            temp->owner->balance += ord->volume * temp->price;
+            temp->owner->position -= ord->volume;
+            // subtract volume from order
+            temp->volume -= ord->volume;
+
+            // subtract money from buyer
+            ord->owner->balance -= ord->volume * temp->price;
+            ord->owner->position += ord->volume;
+
+            // free order
+        } else {
+
+        }
+    }
+
+    // if order isn't fully filled, continue matching, else append
+    if (
+        ord->volume > 0 &&
+        node->next &&
+        node->next->price <= ord->price
+    ) {
+        match_bid(node->next, ord);
+    } else {
+        // append bid to bid list
+    }
+ 
+    // free orderhead and redo orderbook, 
+    if (node->prev) node->prev = node->next;
+    if (node->next) node->next->prev = node->prev;
+    free_orderHead(node);
 
 }
 
-void match_ask(orderbook *orderbook, order *ord) {
+void match_ask(orderHead *node, order *ord) {
 
 }
+
 
 /////////////////////////////////  SEQUENCE 3  /////////////////////////////////
 
@@ -477,25 +565,6 @@ void game_log(game *g, char mode) {
     }
 }
 
-void print_orderbook(orderbook *orderbook) {
-    // prints out orderbook
-    // printf("Orderbook data:\n");
-    // printf("||----||-----||----||\n");
-    // printf("||Bids||Price||Asks||\n");
-    // printf("||----||-----||----||\n");
-    // for (int i = 999;i >= 0;i--) {
-    //     orderHead *temp = orderbook[i];
-    //     if (temp) {
-    //         if (temp->volume > 0) {
-    //             printf("||----||-%03d-||%04d||\n", (i + 1), temp->volume);
-    //         } else if (temp->volume < 0){
-    //             printf("||%04d||-%03d-||----||\n", temp->volume, (i + i));
-    //         }
-    //     }
-    // }
-    // printf("||----||-----||----||\n");
-}
-
 bool check_response() {
     char temp;
 
@@ -598,4 +667,3 @@ void free_orderHead(orderHead *h) {
 
     free(h);
 }
-
