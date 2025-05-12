@@ -13,7 +13,7 @@
  *                       Author:: Victor Tang                                 *
  *                                                                            *
  *----------------------------------------------------------------------------*
- *		Main body of project, handles overall logic.                          *
+ *    Main body of project, handles overall logic.                            *
  * - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
 
 

@@ -13,8 +13,8 @@
  *                       Author:: Victor Tang                                 *
  *                                                                            *
  *----------------------------------------------------------------------------*
- *		Defines constants, strings and forward declrations of structs, funct- *
- * -ions and helpers.														  *
+ *    Defines constants, strings and forward declrations of structs, functions*
+ * and helpers.                                                               *
  * - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
 
 /////////////////////////////////// LIBRARIES //////////////////////////////////

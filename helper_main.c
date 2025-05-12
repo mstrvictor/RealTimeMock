@@ -13,7 +13,7 @@
  *                       Author:: Victor Tang                                 *
  *                                                                            *
  *----------------------------------------------------------------------------*
- *		Function body of helper structs functions and helpers.                *
+ *    Function body of helper structs functions and helper.                   *
  * - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
 
 
