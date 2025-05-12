@@ -8,12 +8,12 @@
  ******************************************************************************
  *                                                                            *
  *                 Project Name : QuantSoc Real Time                          *
- *                                Mock Trading Game                           *                      *
+ *                                Mock Trading Game                           *
  *                                                                            *
  *                       Author:: Victor Tang                                 *
  *                                                                            *
  *----------------------------------------------------------------------------*
- *		Main body of project, handles overall logic.						  *
+ *		Main body of project, handles overall logic.                          *
  * - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
 
 
